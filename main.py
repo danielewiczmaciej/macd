@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as mp
 import numpy as np
-
+import math
 
 
 def ema(data, day, n, signal):
@@ -19,18 +19,33 @@ def ema(data, day, n, signal):
     return (total / div)
 
 
-def main():
-    # Use a breakpoint in the code line below to debug your script.
-    data = pd.read_csv('wig20_d.csv')
-    ceny_zamk = data.loc[:, 'Zamkniecie']
+def buy(money, fund, price):
+    available = math.floor(money / price)
+    fund = fund + available
+    money = money - available * price
+    return money, fund
 
-    ema12 = [0] * 1000
-    ema26 = [0] * 1000
-    macd = [0] * 1000
-    signal = [0] * 1000
 
-    x = np.arange(0, 1000)
+def sell(money, fund, price):
+    sold = fund * price
+    fund = 0
+    money = money + sold
+    return money, fund
 
+
+def trade(idx, macd, signal, lista_cen):
+    money = 10000
+    fund = 0
+    for index in idx:
+        if signal[index] > macd[index]:
+            money, fund = buy(money, fund, lista_cen[index])
+        else:
+            money, fund = sell(money, fund, lista_cen[index])
+    money, fund = sell(money, fund, lista_cen[index])
+    return money
+
+
+def establish_stock_indicies(ema12, ema26, macd, signal, ceny_zamk):
     for row in range(12, 1000):
         ema12[row] = ema(ceny_zamk, row, 12, False)
 
@@ -41,24 +56,43 @@ def main():
     for row in range(26, 1000):
         signal[row] = ema(macd, row, 9, True)
 
-    data['ema12'] = ema12
-    data['ema26'] = ema26
-    data['macd'] = macd
-    data['signal'] = signal
+
+def find_intersection(macd, signal, x):
+    idx = np.argwhere(np.diff(np.sign(np.array(macd) - np.array(signal)))).flatten()
+    mp.plot(x[idx], np.array(macd)[idx], 'ro')
+    return idx
+
+
+def main():
+    # Use a breakpoint in the code line below to debug your script.
+    data = pd.read_csv('wig20_d.csv')
+    ceny_zamk = data.loc[:, 'Zamkniecie']
+
+    ema12 = [0] * 1000
+    ema26 = [0] * 1000
+    macd = [0] * 1000
+    signal = [0] * 1000
+
+    establish_stock_indicies(ema12, ema26, macd, signal, ceny_zamk)
+
+    x = np.arange(0, 1000)
 
     mp.plot(x, macd, '-', label='MACD')
     mp.plot(x, signal, '-', label='SIGNAL')
 
-    idx = np.argwhere(np.diff(np.sign(np.array(macd)-np.array(signal)))).flatten()
-    mp.plot(x[idx], np.array(macd)[idx], 'ro')
+    idx = find_intersection(macd, signal, x)
 
     lista_cen = ceny_zamk.values.tolist()
-    diff = lista_cen[0]
-    for n in range(len(lista_cen)):
-        lista_cen[n] -= diff
-        lista_cen[n] *= 0.2
+
+    print(trade(idx, macd, signal, lista_cen))
+
+    mp.legend()
+
+    mp.show()
 
     mp.plot(x, lista_cen, '-', label='Cena')
+    mp.plot(x[idx], np.array(lista_cen)[idx], 'ro', label='Moment sprzedaży/kupna')
+
     mp.legend()
 
     mp.show()
